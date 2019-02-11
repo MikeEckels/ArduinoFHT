@@ -39,6 +39,11 @@
 LiquidCrystal lcd(9, 8, 7, 6, 5, 4);
 char lcdLineBuf[16 + 1];
 
+//Change Filter
+KalmanFilter changeKF = KalmanFilter(0.25f, 20);
+float previousMaxValue = 0.0f;
+float cr = 0.25f;//complementaryRatio
+
 void setup()
 {
 	//pinMode(MicPin, INPUT); // relevant for digital pins. not relevant for analog. however, don't put into digital OUTPUT mode if going to read analog values.
@@ -231,9 +236,16 @@ void MeasureFHT()
       Max = i;
     }
   }
-  int Motor = map(Max,20,132,255,0);
-  analogWrite(6, Motor);
+
+  float change = changeKF.Filter((float)Max - previousMaxValue);
+  
+  int scaledMaxOutput = map(Max, 20, 132, 255, 0);
+  int complementary = (int)constrain((scaledMaxOutput * cr + change * (1.0f - cr)), 0, 255);
+  
+  analogWrite(6, complementary);
   //Serial.println(Motor);
+
+  previousMaxValue = (float)Max;
 
 #else
 	// print as text
