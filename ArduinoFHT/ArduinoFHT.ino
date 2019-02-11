@@ -5,6 +5,7 @@
 #define LIN_OUT8 1 // use the linear byte output function
 #define FHT_N 256 // set to 256 point fht
 #include <FHT.h> // include the library
+#include "KalmanFilter.h"
 
 // pins
 #define MicPin A0 // used with analogRead mode only
@@ -40,9 +41,9 @@ LiquidCrystal lcd(9, 8, 7, 6, 5, 4);
 char lcdLineBuf[16 + 1];
 
 //Change Filter
-KalmanFilter changeKF = KalmanFilter(0.25f, 20);
+KalmanFilter changeKF = KalmanFilter(0.01f, 100);
 float previousMaxValue = 0.0f;
-float cr = 0.25f;//complementaryRatio
+float cr = 0.75f;//complementaryRatio
 
 void setup()
 {
@@ -224,8 +225,8 @@ void MeasureFHT()
 
 #ifdef FreqSerialBinary
 	// print as binary
-	Serial.write(255); // send a start byte
-	Serial.write(FreqOutData, FHT_N / 2); // send out the data
+	//Serial.write(255); // send a start byte
+	//Serial.write(FreqOutData, FHT_N / 2); // send out the data
   
   long Max = 0;
   
@@ -237,15 +238,18 @@ void MeasureFHT()
     }
   }
 
-  float change = changeKF.Filter((float)Max - previousMaxValue);
+  int scaledMaxOutput = map(Max, 20, 132, -40, 300);
   
-  int scaledMaxOutput = map(Max, 20, 132, 255, 0);
-  int complementary = (int)constrain((scaledMaxOutput * cr + change * (1.0f - cr)), 0, 255);
+  float change = map(constrain(changeKF.Filter((float)scaledMaxOutput - previousMaxValue), 0, 255), 0, 10, 0, 500);
+  
+  int complementary = (int)((float)scaledMaxOutput * cr + change * (1.0f - cr));
+
+  complementary = constrain(map(complementary, 0, 255, 255, 0), 0, 255);
   
   analogWrite(6, complementary);
-  //Serial.println(Motor);
+  Serial.print("Out: "); Serial.print(scaledMaxOutput); Serial.print(" "); Serial.print(change); Serial.print(" "); Serial.println(complementary);
 
-  previousMaxValue = (float)Max;
+  previousMaxValue = (float)scaledMaxOutput;
 
 #else
 	// print as text
